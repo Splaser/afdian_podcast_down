@@ -3,8 +3,10 @@ import os
 from random import randint
 from time import sleep
 
+import configparser
 import eyed3
 import requests
+import re
 
 SLEEP_TIME = 30
 
@@ -26,7 +28,7 @@ headers = {
 }
 
 
-def download_page(data, list: bool, n: int=-1):
+def download_page(data, onlyshowlist: bool, n: int = -1):
     albums = data["list"]
     for album in albums:
         # 下载n期
@@ -41,9 +43,9 @@ def download_page(data, list: bool, n: int=-1):
         cover_url = album["audio_thumb"]
         audio_url: str = album["audio"]
         # 是否仅列出
-        if list:
+        if onlyshowlist:
             print(title)
-            print(description.replace("\n\n", "\n")) # 去除多余空行
+            print(description.replace("\n\n", "\n"))  # 去除多余空行
             print("="*40)
         else:
             filename = f"{title}.mp3"
@@ -54,15 +56,18 @@ def download_page(data, list: bool, n: int=-1):
             cover = None
             try:
                 cover = requests.get(cover_url).content
-                print(f"封面下载完毕")
+                print("封面下载完毕.")
             except Exception as e:
                 print(f"封面下载失败：{cover_url}")
                 print(e)
             try:
                 if not os.path.exists(filename):
                     # 没有下载过
-                    mp3 = requests.get(audio_url, headers=headers, cookies=cookies).content
-                    with open(filename, "wb+") as file:
+                    mp3 = requests.get(audio_url, headers=headers, 
+                                       cookies=cookies).content
+                    # 删除文件名中的非法字符
+                    filename = re.sub(r'[<>:"/\\|?*]', '', filename)
+                    with open(filename, "xb") as file:
                         file.write(mp3)
                     print(f"{filename} 下载完成")
                 audio: eyed3.core.AudioFile = eyed3.load(filename)
@@ -76,6 +81,7 @@ def download_page(data, list: bool, n: int=-1):
                     else:
                         print("转码出错")
                         continue
+
                 audio: eyed3.core.AudioFile = eyed3.load(filename)
                 if audio.tag is None:
                     audio.initTag()
@@ -85,9 +91,9 @@ def download_page(data, list: bool, n: int=-1):
                 audio.tag.comments.set(description)
                 audio.tag.images.set(3, cover, "image/jpeg")
                 audio.tag.save()
-                print(f"已完成\n")
+                print("已完成.\n")
             except Exception as e:
-                print("下载歌曲失败")
+                print("下载歌曲失败.")
                 print(e)
             sleep(SLEEP_TIME + randint(0, 5))
 
@@ -100,7 +106,8 @@ def get_all_albums(album_id: str, list: bool):
         'rankField': 'rank',
     }
     while True:
-        resp = requests.get('https://afdian.net/api/user/get-album-post', headers=headers, params=params,
+        resp = requests.get('https://afdian.net/api/user/get-album-post', 
+                            headers=headers, params=params,
                             cookies=cookies).json()
         data = resp["data"]
         download_page(data, list, -1)
@@ -115,14 +122,15 @@ def get_all_albums(album_id: str, list: bool):
 
 
 # 获取倒数第n期节目
-def get_latest_n(album_id: str, list: bool, n:int = 0):
+def get_latest_n(album_id: str, list: bool, n: int = 0):
     params = {
         'album_id': album_id,
         'lastRank': 0,
         'rankOrder': 'desc',
         'rankField': 'publish_sn',
     }
-    resp = requests.get('https://afdian.net/api/user/get-album-post', headers=headers, params=params,
+    resp = requests.get('https://afdian.net/api/user/get-album-post', 
+                        headers=headers, params=params,
                         cookies=cookies).json()
     data = resp["data"]
     download_page(data, list, n)
@@ -133,13 +141,15 @@ if __name__ == '__main__':
     parser.add_argument("--id", required=True, type=str, help="URL里的id")
     parser.add_argument("--list", action="store_true", help="仅列出，不下载")
     parser.add_argument("--all", action="store_true", help="下载全部")
-    parser.add_argument("--latest", metavar="n", type=int, default=1, help="下载最新n期")
+    parser.add_argument("--latest", metavar="n", 
+                        type=int, default=1, help="下载最新n期")
     args = parser.parse_args()
-    if "auth_token" in os.environ:
-        cookies["auth_token"] = os.environ["auth_token"]
-    else:
-        print("auth_token未配置")
-        exit(1)
+    # 解析 INI 文件
+    config = configparser.ConfigParser()
+    config.read("config.ini")
+    # 读取环境变量的值
+    auth_token = config.get("ENVIRONMENT", "auth_token")
+    cookies["auth_token"] = auth_token
     if args.all:
         get_all_albums(args.id, args.list)
     if args.latest:
