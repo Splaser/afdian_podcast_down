@@ -1,6 +1,6 @@
 import argparse
 import os
-from random import randint
+from random import randint, random
 from time import sleep
 
 import configparser
@@ -8,16 +8,17 @@ import eyed3
 import requests
 import re
 
+AFDIAN_DOMAIN = 'ifdian.net'
 SLEEP_TIME = 30
 
 cookies = {}
 
 headers = {
-    'authority': 'afdian.net',
+    'authority': AFDIAN_DOMAIN,
     'accept-language': 'zh-CN,zh;q=0.9,en;q=0.8,zh-TW;q=0.7',
     'cache-control': 'no-cache',
     'pragma': 'no-cache',
-    'referer': 'https://afdian.net/album/c6ae1166a9f511eab22c52540025c377',
+    'referer': f'https://{AFDIAN_DOMAIN}/album/c6ae1166a9f511eab22c52540025c377',
     'sec-ch-ua': '" Not A;Brand";v="99", "Chromium";v="100"',
     'sec-ch-ua-mobile': '?0',
     'sec-ch-ua-platform': '"Linux"',
@@ -28,8 +29,7 @@ headers = {
 }
 
 
-def download_page(data, onlyshowlist: bool, n: int = -1):
-    albums = data["list"]
+def download_page(albums, list_only: bool, n: int = -1):
     for album in albums:
         # 下载n期
         if not n == -1:
@@ -43,7 +43,7 @@ def download_page(data, onlyshowlist: bool, n: int = -1):
         cover_url = album["audio_thumb"]
         audio_url: str = album["audio"]
         # 是否仅列出
-        if onlyshowlist:
+        if list_only:
             print(title)
             print(description.replace("\n\n", "\n"))  # 去除多余空行
             print("="*40)
@@ -98,7 +98,7 @@ def download_page(data, onlyshowlist: bool, n: int = -1):
             sleep(SLEEP_TIME + randint(0, 5))
 
 
-def get_all_albums(album_id: str, list: bool):
+def get_all_albums(album_id: str, list_only: bool):
     params = {
         'album_id': album_id,
         'lastRank': 0,
@@ -106,13 +106,13 @@ def get_all_albums(album_id: str, list: bool):
         'rankField': 'rank',
     }
     while True:
-        resp = requests.get('https://afdian.net/api/user/get-album-post', 
+        resp = requests.get(f'https://{AFDIAN_DOMAIN}/api/user/get-album-post', 
                             headers=headers, params=params,
                             cookies=cookies).json()
         data = resp["data"]
-        download_page(data, list, -1)
+        download_page(data, list_only, -1)
         params["lastRank"] += 10
-        if list:
+        if list_only:
             sleep(randint(2, 5))
         else:
             sleep(SLEEP_TIME + randint(0, 5))
@@ -122,18 +122,28 @@ def get_all_albums(album_id: str, list: bool):
 
 
 # 获取倒数第n期节目
-def get_latest_n(album_id: str, list: bool, n: int = 0):
+def get_latest_n(album_id: str, n: int = 0) -> list:
+    albums = []
+    has_more = True
     params = {
         'album_id': album_id,
         'lastRank': 0,
         'rankOrder': 'desc',
         'rankField': 'publish_sn',
     }
-    resp = requests.get('https://afdian.net/api/user/get-album-post', 
-                        headers=headers, params=params,
-                        cookies=cookies).json()
-    data = resp["data"]
-    download_page(data, list, n)
+    while len(albums) < n and has_more:
+        resp = requests.get(f'https://{AFDIAN_DOMAIN}/api/user/get-album-post', headers=headers, params=params, cookies=cookies).json()
+        albums += resp["data"]['list']
+        has_more = True if resp['data']['has_more'] == 1 else False
+        params['lastRank'] = albums[-1]['rank']
+        sleep(random())
+    return albums[:n]
+
+
+# 下载倒数n期节目
+def download_latest_n(album_id: str, list_only: bool, n: int = 0):
+    albums = get_latest_n(album_id, n)
+    download_page(albums, list_only, n)
 
 
 if __name__ == '__main__':
@@ -153,4 +163,4 @@ if __name__ == '__main__':
     if args.all:
         get_all_albums(args.id, args.list)
     if args.latest:
-        get_latest_n(args.id, args.list, args.latest)
+        download_latest_n(args.id, args.list, args.latest)
