@@ -50,10 +50,6 @@ def get_album_name(album_id: str):
         resp = session.get(url,
                            params={"album_id": album_id}).json()
 
-        if resp.status_code != 200 or not resp.json().get("data"):
-            print("[WARN] cookie 可能失效，请刷新浏览器")
-            return None
-
         album_title = resp.get("data", {}).get("album", {}).get("title")
         if album_title:
             return album_title
