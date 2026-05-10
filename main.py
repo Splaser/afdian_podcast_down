@@ -10,7 +10,7 @@ import re
 
 
 AFDIAN_DOMAIN = 'ifdian.net'
-SLEEP_TIME = 5
+SLEEP_TIME = 8
 
 session = requests.Session()
 
@@ -153,8 +153,9 @@ def extract_album_list(resp_data):
                 has_more = resp_data.get("has_more", 0)
                 return albums, has_more
 
-    # 没有找到列表
-    print("[WARN] 当前 cookie 可能失效，请在浏览器中刷新该专辑页面后重试。")
+    if not albums:
+        print("[WARN] 当前 cookie 可能失效，或请求过快导致空返回。请刷新浏览器或稍后重试。")
+        
     return albums, has_more
 
 
