@@ -193,20 +193,26 @@ def get_latest_n(album_id: str, n: int = 0) -> list:
         'rankField': 'publish_sn',
     }
     while len(albums) < n and has_more:
-        resp = requests.get(f'https://{AFDIAN_DOMAIN}/api/user/get-album-post', headers=headers, params=params).json()
+        resp = session.get(f'https://{AFDIAN_DOMAIN}/api/user/get-album-post',
+                           headers=headers, params=params).json()
         albums_page, has_more = extract_album_list(resp.get("data", {}))
         albums += albums_page
-        has_more = True if resp['data']['has_more'] == 1 else False
-        params['lastRank'] = albums[-1]['rank']
+        if albums:
+            params['lastRank'] = albums[-1].get('rank', params['lastRank'] + 10)
         sleep(random())
     return albums[:n]
 
 
 # 下载倒数n期节目
 def download_latest_n(album_id: str, list_only: bool, n: int = 0):
+    # 获取专辑名
+    album_name = get_album_name(album_id)
+    safe_album_name = re.sub(r'[<>:"/\\|?*]', '', album_name)
+    os.makedirs(safe_album_name, exist_ok=True)
+
+    # 下载倒数 n 期节目
     albums = get_latest_n(album_id, n)
-    # 传 session 给 download_page
-    download_page(albums, list_only, n)
+    download_page(albums, list_only, album_path=safe_album_name)
 
 
 def get_authenticated_session(browser='firefox', domain=AFDIAN_DOMAIN):
@@ -237,7 +243,7 @@ if __name__ == '__main__':
     parser.add_argument("--id", type=str, help="URL里的id")
     parser.add_argument("--url", type=str, help="完整 album URL，自动解析 ID")
     parser.add_argument("--list", action="store_true", help="仅列出，不下载")
-    parser.add_argument("--latest", metavar="n", type=int, default=1, help="下载最新n期")
+    parser.add_argument("--latest", metavar="n", type=int, default=None, help="下载最新n期")
     parser.add_argument("--browser", type=str, default="firefox", help="选择浏览器: firefox 或 chrome")
     args = parser.parse_args()
 
