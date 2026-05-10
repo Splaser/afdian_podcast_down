@@ -1,1 +1,38 @@
+# 音频文件
 *.mp3
+*.m4a
+
+# 封面 / 临时下载
+*.jpg
+*.png
+*.webp
+downloads/
+covers/
+
+# metadata / JSON
+metadata/
+*.json
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# IDE / 编辑器
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
+
+# ffmpeg 临时文件
+*.tmp
+*.log
+
+# OS 系统文件
+.DS_Store
+Thumbs.db
+
+# 如果你生成了 zip / package
+*.zip
+*.tar.gz
