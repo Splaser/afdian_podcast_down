@@ -49,6 +49,11 @@ def get_album_name(album_id: str):
         url = f"https://{AFDIAN_DOMAIN}/api/user/get-album-info"
         resp = session.get(url,
                            params={"album_id": album_id}).json()
+
+        if resp.status_code != 200 or not resp.json().get("data"):
+            print("[WARN] cookie 可能失效，请刷新浏览器")
+            return None
+
         album_title = resp.get("data", {}).get("album", {}).get("title")
         if album_title:
             return album_title
@@ -153,7 +158,7 @@ def extract_album_list(resp_data):
                 return albums, has_more
 
     # 没有找到列表
-    print("[WARN] 无法解析 album 列表，返回空")
+    print("[WARN] 当前 cookie 可能失效，请在浏览器中刷新该专辑页面后重试。")
     return albums, has_more
 
 
