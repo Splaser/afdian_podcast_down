@@ -82,6 +82,10 @@ def download_page(albums, list_only: bool, album_path: str = ".", n: int = -1, s
             safe_title = re.sub(r'[<>:"/\\|?*]', '', title)
             filename = os.path.join(album_path, f"{safe_title}.mp3")
             print(f"正在处理：{title}")
+            # 显式跳过已存在文件
+            if os.path.exists(filename):
+                print(f"[INFO] 文件已存在，跳过：{filename}")
+                continue
             if audio_url.strip() == "":
                 print("本条动态没有音频文件，跳过")
                 continue
@@ -122,7 +126,8 @@ def download_page(albums, list_only: bool, album_path: str = ".", n: int = -1, s
                 print("已完成.\n")
             except Exception as e:
                 print("下载失败", e)
-            sleep(SLEEP_TIME + random()*3)
+
+        sleep(SLEEP_TIME + random()*3)
 
 
 def extract_album_list(resp_data):
@@ -178,8 +183,6 @@ def get_all_albums(album_id: str, list_only: bool):
         if albums:
             params["lastRank"] = albums[-1].get("rank", params["lastRank"] + 10)
 
-        sleep(randint(2, 5) if list_only else SLEEP_TIME + random()*3)
-
         if not has_more:
             break
 
@@ -201,7 +204,8 @@ def get_latest_n(album_id: str, n: int = 0) -> list:
         albums += albums_page
         if albums:
             params['lastRank'] = albums[-1].get('rank', params['lastRank'] + 10)
-        sleep(random())
+
+        sleep(SLEEP_TIME + random()*3)
     return albums[:n]
 
 
