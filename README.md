@@ -19,7 +19,11 @@ $ pip install -r requirements.txt
 
 ### 下载全部
 ```shell
-$ python main.py --id ALBUM_ID --all
+$ python main.py --id ALBUM_ID
+```
+或者
+```shell
+$ python main.py --url https://ifdian.net/album/1234567890abcdef
 ```
 ### 下载最新n期
 ```shell
@@ -27,6 +31,13 @@ $ python main.py --id ALBUM_ID --all
 $ python main.py --id ALBUM_ID --latest n --list
 # 下载
 $ python main.py --id ALBUM_ID --latest n
+```
+或者
+```shell
+# 列出最新n期
+$ python main.py --url https://ifdian.net/album/1234567890abcdef --latest n --list
+# 下载
+$ python main.py --url https://ifdian.net/album/1234567890abcdef --latest n
 ```
 
 ### 其他说明

@@ -7,6 +7,8 @@ import eyed3
 import requests
 import re
 
+
+
 AFDIAN_DOMAIN = 'ifdian.net'
 SLEEP_TIME = 5
 
@@ -39,7 +41,25 @@ def ffmpeg_convert(infile):
     return False
 
 
-def download_page(albums, list_only: bool, n: int = -1, session=session):
+def get_album_name(album_id: str):
+    """
+    获取专辑标题，用于创建文件夹
+    """
+    try:
+        url = f"https://{AFDIAN_DOMAIN}/api/user/get-album-info"
+        resp = session.get(url,
+                           params={"album_id": album_id}).json()
+        album_title = resp.get("data", {}).get("album", {}).get("title")
+        if album_title:
+            return album_title
+    except Exception as e:
+        print("[WARN] 获取专辑信息失败:", e)
+
+    # fallback: 返回 album_id
+    return album_id
+
+def download_page(albums, list_only: bool, album_path: str = ".", n: int = -1, session=session):
+    os.makedirs(album_path, exist_ok=True)
     for album in albums:
         # 下载n期
         if not n == -1:
@@ -59,7 +79,7 @@ def download_page(albums, list_only: bool, n: int = -1, session=session):
             print("="*40)
         else:
             safe_title = re.sub(r'[<>:"/\\|?*]', '', title)
-            filename = f"{safe_title}.mp3"
+            filename = os.path.join(album_path, f"{safe_title}.mp3")
             print(f"正在处理：{title}")
             if audio_url.strip() == "":
                 print("本条动态没有音频文件，跳过")
@@ -78,7 +98,6 @@ def download_page(albums, list_only: bool, n: int = -1, session=session):
                     mp3 = session.get(audio_url).content
 
                     # 删除文件名中的非法字符
-                    filename = f"{safe_title}.mp3"
                     with open(filename, "xb") as file:
                         file.write(mp3)
                     print(f"{filename} 下载完成")
@@ -94,7 +113,7 @@ def download_page(albums, list_only: bool, n: int = -1, session=session):
                     audio.initTag()
                 audio.tag.artist = author
                 audio.tag.title = title
-                audio.tag.album = title
+                audio.tag.album = album_path
                 audio.tag.comments.set(description)
                 if cover:
                     audio.tag.images.set(3, cover, "image/jpeg")
@@ -140,6 +159,8 @@ def extract_album_list(resp_data):
 
 def get_all_albums(album_id: str, list_only: bool):
     params = {'album_id': album_id, 'lastRank': 0, 'rankOrder': 'asc', 'rankField': 'rank'}
+    album_name = get_album_name(album_id)
+    safe_album_name = re.sub(r'[<>:"/\\|?*]', '', album_name)
     while True:
         resp = session.get(f'https://{AFDIAN_DOMAIN}/api/user/get-album-post',
                            headers=headers, params=params).json()
@@ -150,7 +171,7 @@ def get_all_albums(album_id: str, list_only: bool):
             print("[WARN] 当前返回数据为空，跳过本次循环")
             break
 
-        download_page(albums, list_only, -1)
+        download_page(albums, list_only, album_path=safe_album_name)
 
         if albums:
             params["lastRank"] = albums[-1].get("rank", params["lastRank"] + 10)
@@ -200,15 +221,32 @@ def get_authenticated_session(browser='firefox', domain=AFDIAN_DOMAIN):
     session.cookies.update(cj)
     return session
 
+def parse_album_id(album_url: str) -> str:
+    """
+    从完整 URL 提取 album_id
+    """
+    m = re.search(r'/album/([0-9a-f]+)', album_url)
+    if m:
+        return m.group(1)
+    else:
+        raise ValueError(f"无法从 URL 解析 album_id: {album_url}")
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="爱发电播客下载")
-    parser.add_argument("--id", required=True, type=str, help="URL里的id")
+    parser.add_argument("--id", type=str, help="URL里的id")
+    parser.add_argument("--url", type=str, help="完整 album URL，自动解析 ID")
     parser.add_argument("--list", action="store_true", help="仅列出，不下载")
-    parser.add_argument("--all", action="store_true", help="下载全部")
     parser.add_argument("--latest", metavar="n", type=int, default=1, help="下载最新n期")
     parser.add_argument("--browser", type=str, default="firefox", help="选择浏览器: firefox 或 chrome")
     args = parser.parse_args()
+
+    if args.url:
+        album_id = parse_album_id(args.url)
+    elif args.id:
+        album_id = args.id
+    else:
+        parser.error("请提供 --id 或 --url 参数")
 
     # 全局 session 初始化
     session = get_authenticated_session(browser=args.browser, domain=AFDIAN_DOMAIN)
@@ -217,9 +255,15 @@ if __name__ == '__main__':
     # 先更新全局 headers
     session.headers.update(headers)
     print(f"[INFO] {args.browser.capitalize()} cookies loaded.")
-    session.headers['referer'] = f"https://{AFDIAN_DOMAIN}/album/{args.id}"
-    
-    if args.all:
-        get_all_albums(args.id, args.list)
-    elif args.latest:
-        download_latest_n(args.id, args.list, args.latest)
+
+    session.headers.update({
+        "referer": f"https://{AFDIAN_DOMAIN}/album/{album_id}",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:150.0) Gecko/20100101 Firefox/150.0",
+        "Accept": "application/json, text/plain, */*",
+    })
+
+    if args.latest:
+        download_latest_n(album_id, args.list, args.latest)
+    else:
+        # 默认下载全部
+        get_all_albums(album_id, args.list)
