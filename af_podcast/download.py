@@ -3,15 +3,14 @@ import os
 import re
 from time import sleep
 from random import random
-import requests
+
 
 from af_podcast.tagging import tag_audio
 from af_podcast.ffmpeg_utils import ffmpeg_convert
 from af_podcast.api import extract_album_list
 
-SLEEP_TIME = 8
 
-def download_page(albums, list_only: bool, album_path: str = ".", session=None):
+def download_page(albums, list_only: bool, album_path: str = ".", session=None, sleep_time: int = 8):
     os.makedirs(album_path, exist_ok=True)
     for album in albums:
         title = album["title"]
@@ -52,9 +51,9 @@ def download_page(albums, list_only: bool, album_path: str = ".", session=None):
                 print("已完成.\n")
             except Exception as e:
                 print("下载失败", e)
-        sleep(SLEEP_TIME + random()*3)
+        sleep(sleep_time + random()*3)
 
-def get_all_albums(album_id: str, list_only: bool, session=None):
+def get_all_albums(album_id: str, list_only: bool, session=None, sleep_time: int = 8):
     from af_podcast.api import get_album_name
     album_name = get_album_name(album_id, session)
     safe_album_name = re.sub(r'[<>:"/\\|?*]', '', album_name)
@@ -66,7 +65,7 @@ def get_all_albums(album_id: str, list_only: bool, session=None):
         if not albums:
             print("[WARN] 当前返回数据为空，跳过本次循环")
             break
-        download_page(albums, list_only, album_path=safe_album_name, session=session)
+        download_page(albums, list_only, album_path=safe_album_name, session=session, sleep_time=sleep_time)
         if albums:
             params["lastRank"] = albums[-1].get("rank", params["lastRank"] + 10)
         if not has_more:
@@ -89,10 +88,10 @@ def get_latest_n(album_id: str, n: int = 0, session=None) -> list:
             params['lastRank'] = albums[-1].get('rank', params['lastRank'] + 10)
     return albums[:n]
 
-def download_latest_n(album_id: str, list_only: bool, n: int = 0, session=None):
+def download_latest_n(album_id: str, list_only: bool, n: int = 0, session=None, sleep_time: int = 8):
     from af_podcast.api import get_album_name
     album_name = get_album_name(album_id, session)
     safe_album_name = re.sub(r'[<>:"/\\|?*]', '', album_name)
     os.makedirs(safe_album_name, exist_ok=True)
     albums = get_latest_n(album_id, n, session)
-    download_page(albums, list_only, album_path=safe_album_name, session=session)
+    download_page(albums, list_only, album_path=safe_album_name, session=session, sleep_time=sleep_time)
