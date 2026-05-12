@@ -27,6 +27,22 @@ $ git clone git@github.com:senventise/afdian_podcast_down.git
 $ cd afdian_podcast_down
 $ pip install -r requirements.txt
 ```
+
+### 可选依赖（推荐）
+
+如果系统安装了 `aria2c`，工具会自动启用：
+
+- 多线程下载
+- 断点续传
+- 更稳定的大文件下载
+
+Windows:
+
+```powershell
+aria2c -v
+```
+如果未安装 aria2，工具会自动 fallback 到 Python requests 下载模式。
+
 ### 获取 album_id  
 节目的url应为：`https://afdian.net/album/ALBUM_ID`。
 注意：是 节目专辑的 URL，不是创作者主页。
