@@ -134,12 +134,12 @@ def get_latest_n(album_id: str, n: int = 0, session=None) -> list:
             params['lastRank'] = albums[-1].get('rank', params['lastRank'] + 10)
     return albums[:n]
 
-def download_latest_n(album_id: str, list_only: bool, n: int = 0, session=None, sleep_time: int = SLEEP_TIME):
+def download_latest_n(album_id: str, list_only: bool, n: int = 0, session=None):
     album_name = get_album_name(album_id, session)
     safe_album_name = re.sub(r'[<>:"/\\|?*]', '', album_name)
     os.makedirs(safe_album_name, exist_ok=True)
     albums = get_latest_n(album_id, n, session)
-    download_page(albums, list_only, album_path=safe_album_name, session=session, sleep_time=sleep_time)
+    download_page(albums, list_only, album_path=safe_album_name, session=session, write_track_num=False)
 
 
 def download_single_post(post_id: str, list_only: bool, session=None):
