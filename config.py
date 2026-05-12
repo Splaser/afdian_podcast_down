@@ -8,3 +8,6 @@ SLEEP_TIME = 8
 
 # 浏览器类型（默认）
 DEFAULT_BROWSER = 'firefox'
+
+# 单条 /p/ 链接默认输出目录
+POST_OUTPUT_DIR = "single_posts"
