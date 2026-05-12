@@ -7,54 +7,97 @@ from config import AFDIAN_DOMAIN, POST_OUTPUT_DIR, SLEEP_TIME
 
 from af_podcast.tagging import tag_audio
 from af_podcast.ffmpeg_utils import ffmpeg_convert
-from af_podcast.api import extract_album_list, get_post_from_page
+from af_podcast.api import extract_album_list, get_post_from_page, get_album_name
 
 
-def download_page(albums, list_only: bool, album_path: str = ".", session=None, sleep_time: int = SLEEP_TIME):
+def download_page(
+    albums,
+    list_only: bool,
+    album_path: str = ".",
+    session=None,
+    sleep_time: int = SLEEP_TIME,
+    write_track_num: bool = False,
+):
     os.makedirs(album_path, exist_ok=True)
+
     total = len(albums)
+
     for index, album in enumerate(albums):
+        track_num = index + 1 if write_track_num else None
+        track_total = total if write_track_num else None
+
         title = album["title"]
         author = album["user"]["name"]
         description = album["content"]
         cover_url = album["audio_thumb"]
         audio_url: str = album["audio"]
+
         if list_only:
             print(title)
             print(description.replace("\n\n", "\n"))
-            print("="*40)
+            print("=" * 40)
         else:
             safe_title = re.sub(r'[<>:"/\\|?*]', '', title)
             filename = os.path.join(album_path, f"{safe_title}.mp3")
+
             print(f"正在处理：{title}")
+
             if os.path.exists(filename):
                 print(f"[INFO] 文件已存在，跳过：{filename}")
                 continue
+
             if audio_url.strip() == "":
                 print("本条动态没有音频文件，跳过")
                 continue
+
             cover = None
+
             try:
                 cover = session.get(cover_url).content
                 print("封面下载完毕.")
             except Exception as e:
                 print(f"封面下载失败：{cover_url}", e)
+
             try:
                 if not os.path.exists(filename):
                     mp3 = session.get(audio_url).content
+
                     with open(filename, "xb") as file:
                         file.write(mp3)
+
                     print(f"{filename} 下载完成")
-                audio = tag_audio(filename, title, author, album_path, cover, description)
+
+                audio = tag_audio(
+                    filename,
+                    title,
+                    author,
+                    album_path,
+                    cover,
+                    description,
+                    track_num=track_num,
+                    track_total=track_total,
+                )
+
                 if not audio:
                     ffmpeg_convert(filename)
-                    tag_audio(filename, title, author, album_path, cover, description)
+                    tag_audio(
+                        filename,
+                        title,
+                        author,
+                        album_path,
+                        cover,
+                        description,
+                        track_num=track_num,
+                        track_total=track_total,
+                    )
+
                 print("已完成.\n")
+
             except Exception as e:
                 print("下载失败", e)
-        
+
         if index < total - 1:
-            sleep(sleep_time + random()*3)
+            sleep(sleep_time + random() * 3)
 
 def get_all_albums(album_id: str, list_only: bool, session=None, sleep_time: int = SLEEP_TIME):
     from af_podcast.api import get_album_name
@@ -68,7 +111,7 @@ def get_all_albums(album_id: str, list_only: bool, session=None, sleep_time: int
         if not albums:
             print("[WARN] 当前返回数据为空，跳过本次循环")
             break
-        download_page(albums, list_only, album_path=safe_album_name, session=session, sleep_time=sleep_time)
+        download_page(albums, list_only, album_path=safe_album_name, session=session, write_track_num=True)
         if albums:
             params["lastRank"] = albums[-1].get("rank", params["lastRank"] + 10)
         if not has_more:
@@ -92,7 +135,6 @@ def get_latest_n(album_id: str, n: int = 0, session=None) -> list:
     return albums[:n]
 
 def download_latest_n(album_id: str, list_only: bool, n: int = 0, session=None, sleep_time: int = SLEEP_TIME):
-    from af_podcast.api import get_album_name
     album_name = get_album_name(album_id, session)
     safe_album_name = re.sub(r'[<>:"/\\|?*]', '', album_name)
     os.makedirs(safe_album_name, exist_ok=True)
