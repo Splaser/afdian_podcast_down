@@ -10,6 +10,35 @@ from af_podcast.ffmpeg_utils import ffmpeg_convert
 from af_podcast.api import extract_album_list, get_post_from_page, get_album_name
 
 
+def download_file_with_progress(session, url: str, filename: str, chunk_size: int = 1024 * 256):
+    """
+    流式下载文件，并打印简单百分比进度。
+    """
+    with session.get(url, stream=True, timeout=60) as resp:
+        resp.raise_for_status()
+
+        total = resp.headers.get("content-length")
+        total = int(total) if total and total.isdigit() else None
+
+        downloaded = 0
+
+        with open(filename, "xb") as file:
+            for chunk in resp.iter_content(chunk_size=chunk_size):
+                if not chunk:
+                    continue
+
+                file.write(chunk)
+                downloaded += len(chunk)
+
+                if total:
+                    percent = downloaded * 100 / total
+                    print(f"\r[INFO] downloading... {percent:.1f}%", end="")
+
+    if total:
+        print()
+    else:
+        print(f"[INFO] downloaded bytes: {downloaded}")
+
 def download_page(
     albums,
     list_only: bool,
@@ -60,11 +89,7 @@ def download_page(
 
             try:
                 if not os.path.exists(filename):
-                    mp3 = session.get(audio_url).content
-
-                    with open(filename, "xb") as file:
-                        file.write(mp3)
-
+                    download_file_with_progress(session, audio_url, filename)
                     print(f"{filename} 下载完成")
 
                 audio = tag_audio(
