@@ -8,36 +8,66 @@ from config import AFDIAN_DOMAIN, POST_OUTPUT_DIR, SLEEP_TIME
 from af_podcast.tagging import tag_audio
 from af_podcast.ffmpeg_utils import ffmpeg_convert
 from af_podcast.api import extract_album_list, get_post_from_page, get_album_name
+import subprocess
+from pathlib import Path
+
+
+_downloaded_progress = {}
+
+def has_aria2():
+    import shutil
+    return shutil.which("aria2c") is not None
+
+def download_file_aria2(url: str, output_path: Path):
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    cmd = [
+        "aria2c",
+        "-c", "-x", "16", "-s", "16",
+        "-o", str(output_path.name),
+        "-d", str(output_path.parent),
+        url
+    ]
+    print(f"[INFO] aria2 downloading {url}")
+    subprocess.run(cmd, check=True)
+    print(f"[INFO] saved: {output_path}")
 
 
 def download_file_with_progress(session, url: str, filename: str, chunk_size: int = 1024 * 256):
-    """
-    流式下载文件，并打印简单百分比进度。
-    """
+    key = str(filename)
+    downloaded = _downloaded_progress.get(key, 0)
+    if os.path.exists(filename):
+        downloaded = max(downloaded, os.path.getsize(filename))
+    _downloaded_progress[key] = downloaded
+
+    # 优先 aria2
+    if has_aria2():
+        try:
+            download_file_aria2(url, Path(filename))
+            return
+        except Exception as e:
+            print(f"[WARN] aria2 failed ({e}), fallback to requests download")
+
+    # requests fallback
     with session.get(url, stream=True, timeout=60) as resp:
         resp.raise_for_status()
 
         total = resp.headers.get("content-length")
-        total = int(total) if total and total.isdigit() else None
+        total = int(total) + downloaded if total and total.isdigit() else None
 
-        downloaded = 0
-
-        with open(filename, "xb") as file:
+        mode = "ab" if downloaded else "wb"
+        with open(filename, mode) as file:
             for chunk in resp.iter_content(chunk_size=chunk_size):
                 if not chunk:
                     continue
-
                 file.write(chunk)
                 downloaded += len(chunk)
-
+                _downloaded_progress[key] = downloaded
                 if total:
-                    percent = downloaded * 100 / total
-                    print(f"\r[INFO] downloading... {percent:.1f}%", end="")
-
-    if total:
-        print()
-    else:
-        print(f"[INFO] downloaded bytes: {downloaded}")
+                    percent = min(downloaded * 100 / total, 100)
+                    print(f"\r[INFO] downloading... {percent:.1f}%", end="", flush=True)
+    print()
+    print(f"[INFO] saved: {filename}")
+    
 
 def download_page(
     albums,
@@ -124,11 +154,13 @@ def download_page(
         if index < total - 1:
             sleep(sleep_time + random() * 3)
 
+
 def get_all_albums(album_id: str, list_only: bool, session=None, sleep_time: int = SLEEP_TIME):
     from af_podcast.api import get_album_name
     album_name = get_album_name(album_id, session)
     safe_album_name = re.sub(r'[<>:"/\\|?*]', '', album_name)
-    params = {'album_id': album_id, 'lastRank': 0, 'rankOrder': 'asc', 'rankField': 'rank'}
+    params = {'album_id': album_id, 'lastRank': 0,
+              'rankOrder': 'asc', 'rankField': 'rank'}
     while True:
         resp = session.get(f'https://ifdian.net/api/user/get-album-post', params=params).json()
         data = resp.get("data", {})
@@ -136,11 +168,14 @@ def get_all_albums(album_id: str, list_only: bool, session=None, sleep_time: int
         if not albums:
             print("[WARN] 当前返回数据为空，跳过本次循环")
             break
-        download_page(albums, list_only, album_path=safe_album_name, session=session, write_track_num=True)
+        download_page(albums, list_only, album_path=safe_album_name,
+                      session=session, write_track_num=True)
         if albums:
-            params["lastRank"] = albums[-1].get("rank", params["lastRank"] + 10)
+            params["lastRank"] = albums[-1].get("rank",
+                                                params["lastRank"] + 10)
         if not has_more:
             break
+
 
 def get_latest_n(album_id: str, n: int = 0, session=None) -> list:
     albums = []
@@ -156,15 +191,18 @@ def get_latest_n(album_id: str, n: int = 0, session=None) -> list:
         albums_page, has_more = extract_album_list(resp.get("data", {}))
         albums += albums_page
         if albums:
-            params['lastRank'] = albums[-1].get('rank', params['lastRank'] + 10)
+            params['lastRank'] = albums[-1].get('rank',
+                                                params['lastRank'] + 10)
     return albums[:n]
+
 
 def download_latest_n(album_id: str, list_only: bool, n: int = 0, session=None):
     album_name = get_album_name(album_id, session)
     safe_album_name = re.sub(r'[<>:"/\\|?*]', '', album_name)
     os.makedirs(safe_album_name, exist_ok=True)
     albums = get_latest_n(album_id, n, session)
-    download_page(albums, list_only, album_path=safe_album_name, session=session, write_track_num=False)
+    download_page(albums, list_only, album_path=safe_album_name,
+                  session=session, write_track_num=False)
 
 
 def download_single_post(post_id: str, list_only: bool, session=None):
