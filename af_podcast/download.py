@@ -12,7 +12,8 @@ from af_podcast.api import extract_album_list, get_post_from_page
 
 def download_page(albums, list_only: bool, album_path: str = ".", session=None, sleep_time: int = SLEEP_TIME):
     os.makedirs(album_path, exist_ok=True)
-    for album in albums:
+    total = len(albums)
+    for index, album in enumerate(albums):
         title = album["title"]
         author = album["user"]["name"]
         description = album["content"]
@@ -51,7 +52,9 @@ def download_page(albums, list_only: bool, album_path: str = ".", session=None, 
                 print("已完成.\n")
             except Exception as e:
                 print("下载失败", e)
-        sleep(sleep_time + random()*3)
+        
+        if index < total - 1:
+            sleep(sleep_time + random()*3)
 
 def get_all_albums(album_id: str, list_only: bool, session=None, sleep_time: int = SLEEP_TIME):
     from af_podcast.api import get_album_name

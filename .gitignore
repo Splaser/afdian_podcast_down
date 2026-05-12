@@ -8,6 +8,7 @@
 *.webp
 downloads/
 covers/
+single_posts/
 
 # metadata / JSON
 metadata/
